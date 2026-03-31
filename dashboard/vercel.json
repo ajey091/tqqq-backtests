@@ -1,0 +1,6 @@
+{
+  "routes": [
+    { "src": "/data.json", "dest": "/data.json" },
+    { "src": "/(.*)", "dest": "/index.html" }
+  ]
+}
