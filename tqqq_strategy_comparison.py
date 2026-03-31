@@ -256,20 +256,26 @@ def ma200_tqqq(df):
 
 
 STRATEGIES = {
-    "200MA TQQQ (baseline)":    ma200_tqqq,
-    "MA band ±2% switch":       ma_band_switch,
-    "DCA TQQQ (ref)":           dca_tqqq,
+    "DCA TQQQ (baseline)":      dca_tqqq,
+    "200MA TQQQ":               ma200_tqqq,
+    "DCA after 50% pullback":   dca_after_50pct_pullback,
+    "Crash accelerator (3×)":   crash_accelerator,
+    "MA crossover DCA":         ma_crossover_dca,
+    "Value averaging (12%)":    value_averaging,
 }
 
 COLORS = {
-    "200MA TQQQ (baseline)":    "#6366F1",
-    "MA band ±2% switch":       "#EF4444",
-    "DCA TQQQ (ref)":           "#64748b",
+    "DCA TQQQ (baseline)":      "#EC4899",
+    "200MA TQQQ":               "#6366F1",
+    "DCA after 50% pullback":   "#F59E0B",
+    "Crash accelerator (3×)":   "#EF4444",
+    "MA crossover DCA":         "#10B981",
+    "Value averaging (12%)":    "#06B6D4",
 }
 
-BASELINE_KEY = "200MA TQQQ (baseline)"
+BASELINE_KEY = "DCA TQQQ (baseline)"
 
-START_YEARS = [1985, 1990, 1995, 2000, 2005, 2010]
+START_YEARS = [1986, 1990, 1995, 2000, 2005, 2010]
 
 
 def run_comparison():
