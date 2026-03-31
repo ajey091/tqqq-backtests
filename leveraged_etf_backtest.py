@@ -14,6 +14,8 @@ import matplotlib.pyplot as plt
 from pathlib import Path
 
 BASE_DIR = Path(__file__).parent
+DATA_DIR = BASE_DIR / "data"
+PLOT_DIR = BASE_DIR / "plots"
 
 # ── Configuration ──────────────────────────────────────────────────────────
 MONTHLY_DCA = 1000.0
@@ -37,7 +39,7 @@ NASDAQ_ETFS = [
 
 # ── Load index data ───────────────────────────────────────────────────────
 def load_index(filename, col_name):
-    df = pd.read_csv(BASE_DIR / filename, parse_dates=["Date"])
+    df = pd.read_csv(DATA_DIR / filename, parse_dates=["Date"])
     df = df[["Date", "Close"]].dropna().sort_values("Date").reset_index(drop=True)
     df.columns = ["date", col_name]
     return df
@@ -275,7 +277,8 @@ def run_backtest(df, label, etf_defs, base_col, lev2_col, lev3_col):
     ax1.grid(True, alpha=0.3)
     fig1.tight_layout()
     price_file = f"leveraged_etf_prices_{label}.png"
-    fig1.savefig(BASE_DIR / price_file, dpi=DPI)
+    PLOT_DIR.mkdir(exist_ok=True)
+    fig1.savefig(PLOT_DIR / price_file, dpi=DPI)
     plt.close(fig1)
     print(f"Saved: {price_file}")
 
@@ -328,7 +331,7 @@ def run_backtest(df, label, etf_defs, base_col, lev2_col, lev3_col):
     ax2.grid(True, alpha=0.3)
     fig2.tight_layout()
     strat_file = f"leveraged_etf_strategies_{label}.png"
-    fig2.savefig(BASE_DIR / strat_file, dpi=DPI)
+    fig2.savefig(PLOT_DIR / strat_file, dpi=DPI)
     plt.close(fig2)
     print(f"Saved: {strat_file}")
 
@@ -523,7 +526,7 @@ def _run_and_plot_combined(sp_df, ndx_df, start_year):
         fig.tight_layout()
         scale = "log" if log_scale else "linear"
         fname = f"leveraged_etf_combined_{tag}_{scale}.png"
-        fig.savefig(BASE_DIR / fname, dpi=DPI)
+        fig.savefig(PLOT_DIR / fname, dpi=DPI)
         plt.close(fig)
         print(f"Saved: {fname}")
 
@@ -679,7 +682,7 @@ def main():
     print("\n\n" + "=" * 60)
     print("NASDAQ-100 LEVERAGED ETF BACKTEST")
     print("=" * 60)
-    ndx_file = BASE_DIR / "NDX_daily.csv"
+    ndx_file = DATA_DIR / "NDX_daily.csv"
     if not ndx_file.exists():
         print("NDX_daily.csv not found — downloading from Yahoo Finance...")
         download_ndx()
@@ -725,7 +728,7 @@ def download_ndx():
             rows.append([dt, quotes["open"][i], quotes["high"][i],
                          quotes["low"][i], close, quotes["volume"][i], close])
 
-    with open(BASE_DIR / "NDX_daily.csv", "w", newline="") as f:
+    with open(DATA_DIR / "NDX_daily.csv", "w", newline="") as f:
         writer = csv.writer(f)
         writer.writerow(["Date", "Open", "High", "Low", "Close", "Volume", "Adj Close"])
         writer.writerows(rows)

@@ -21,6 +21,7 @@ from leveraged_etf_backtest import (
 )
 
 BASE_DIR = Path(__file__).parent
+PLOT_DIR = BASE_DIR / "plots"
 
 
 # ── Strategies ────────────────────────────────────────────────────────────
@@ -356,7 +357,8 @@ def run_comparison():
 
         fig.tight_layout()
         fname = f"tqqq_comparison_{start_year}.png"
-        fig.savefig(BASE_DIR / fname, dpi=200)
+        PLOT_DIR.mkdir(exist_ok=True)
+        fig.savefig(PLOT_DIR / fname, dpi=200)
         plt.close(fig)
         print(f"  Saved: {fname}")
 

@@ -42,39 +42,39 @@ Prices are simulated from daily index returns applying the appropriate leverage 
 
 **S&P 500 family (1928-2025):**
 
-![S&P 500 ETF Prices](leveraged_etf_prices_sp500.png)
+![S&P 500 ETF Prices](plots/leveraged_etf_prices_sp500.png)
 
 **Nasdaq-100 family (1985-2025):**
 
-![Nasdaq ETF Prices](leveraged_etf_prices_nasdaq.png)
+![Nasdaq ETF Prices](plots/leveraged_etf_prices_nasdaq.png)
 
 ### Portfolio growth — all strategies
 
 **From 1990 (log scale):**
 
-![Combined 1990 Log](leveraged_etf_combined_1990_log.png)
+![Combined 1990 Log](plots/leveraged_etf_combined_1990_log.png)
 
 **From 2000 (survived dot-com crash + GFC):**
 
-![Combined 2000 Log](leveraged_etf_combined_2000_log.png)
+![Combined 2000 Log](plots/leveraged_etf_combined_2000_log.png)
 
 **From 2000 (linear scale — shows magnitude differences):**
 
-![Combined 2000 Linear](leveraged_etf_combined_2000_linear.png)
+![Combined 2000 Linear](plots/leveraged_etf_combined_2000_linear.png)
 
 ### TQQQ strategy comparisons
 
 **From 1986 (full Nasdaq history):**
 
-![TQQQ Strategies 1986](tqqq_comparison_1986.png)
+![TQQQ Strategies 1986](plots/tqqq_comparison_1986.png)
 
 **From 2000 (dot-com crash start):**
 
-![TQQQ Strategies 2000](tqqq_comparison_2000.png)
+![TQQQ Strategies 2000](plots/tqqq_comparison_2000.png)
 
 **From 2010 (bull market):**
 
-![TQQQ Strategies 2010](tqqq_comparison_2010.png)
+![TQQQ Strategies 2010](plots/tqqq_comparison_2010.png)
 
 ### XIRR sensitivity by start year
 
@@ -116,8 +116,8 @@ Standard CAGR doesn't work for DCA strategies since money enters at different ti
 | `leveraged_etf_backtest.py` | Core engine: price simulation, DCA/9sig/200MA strategies, XIRR, plotting |
 | `tqqq_strategy_comparison.py` | Alternative TQQQ strategy comparisons with plots |
 | `generate_dashboard_data.py` | Generates `dashboard/data.json` for the interactive Plotly dashboard |
-| `GSPC_daily.csv` | S&P 500 daily prices (1928-2025) |
-| `NDX_daily.csv` | Nasdaq-100 daily prices (1985-2025) |
+| `data/` | Historical price data (S&P 500 from 1928, Nasdaq-100 from 1985) |
+| `plots/` | All generated backtest plots |
 | `dashboard/` | Interactive Plotly.js dashboard ([live](https://dashboard-nine-eta-26.vercel.app)) |
 
 ## Usage
