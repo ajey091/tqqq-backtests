@@ -37,7 +37,7 @@
   <header>
     <h1>Leveraged ETF DCA Backtest</h1>
     <p>
-      Sensitivity analysis of 12 DCA strategies across S&amp;P 500 (SPY/SSO/UPRO) and Nasdaq-100 (QQQ/QLD/TQQQ).
+      Sensitivity analysis of 13 DCA strategies across S&amp;P 500 (SPY/SSO/UPRO) and Nasdaq-100 (QQQ/QLD/TQQQ).
       $1,000/month DCA with simulated leveraged ETF prices. Both indices are price-only (no dividends); real returns ~2%/yr higher.
     </p>
   </header>
@@ -100,10 +100,8 @@ const PLOTLY_LAYOUT_DEFAULTS = {
   hovermode: 'x unified',
 };
 
-const SP_NAMES = ['DCA SPY', 'DCA SSO', 'DCA UPRO', '9sig UPRO+cash', '200MA SSO', '200MA UPRO'];
-const NDX_NAMES = ['DCA QQQ', 'DCA QLD', 'DCA TQQQ', '9sig TQQQ+cash', '200MA QLD', '200MA TQQQ'];
-
 function getDash(name) {
+  if (name.startsWith('200MA+9sig')) return 'longdashdot';
   if (name.startsWith('200MA')) return 'dot';
   if (name.startsWith('9sig')) return 'dashdot';
   return 'solid';

@@ -35,6 +35,41 @@ NASDAQ_ETFS = [
 ]
 
 
+# ── Risk-free rate (fed funds) ────────────────────────────────────────────
+_FF_CACHE = None
+
+def load_fed_funds_rate():
+    """Load daily fed funds rate and return as a Series indexed by date."""
+    global _FF_CACHE
+    if _FF_CACHE is not None:
+        return _FF_CACHE
+    ff_path = BASE_DIR / "fed_funds_rate.csv"
+    if not ff_path.exists():
+        _FF_CACHE = pd.Series(dtype=float)
+        return _FF_CACHE
+    ff = pd.read_csv(ff_path)
+    ff.columns = ["date", "rate"]
+    ff["date"] = pd.to_datetime(ff["date"])
+    ff["rate"] = pd.to_numeric(ff["rate"], errors="coerce")
+    ff = ff.dropna().set_index("date")["rate"]
+    _FF_CACHE = ff
+    return ff
+
+
+def build_daily_cash_rate(dates):
+    """Build array of daily cash multipliers (1 + r_daily) aligned to dates."""
+    ff = load_fed_funds_rate()
+    daily_mult = np.ones(len(dates))
+    if ff.empty:
+        return daily_mult
+    # Reindex ff to trading dates using forward-fill
+    ff_aligned = ff.reindex(dates, method="ffill")
+    # Convert annual % rate to daily multiplier
+    valid = ff_aligned.notna()
+    daily_mult[valid] = 1 + ff_aligned[valid].values / 100 / 365
+    return daily_mult
+
+
 # ── Load index data ───────────────────────────────────────────────────────
 def load_index(filename, col_name):
     df = pd.read_csv(BASE_DIR / filename, parse_dates=["Date"])
@@ -97,13 +132,13 @@ def dca_strategy(df, price_col):
 def ninesig_strategy(df, lev3_col):
     """9-signal: DCA into cash pool, quarterly rebalance 3× ETF vs cash.
 
-    Signal line is a running target that compounds at 9%/yr daily and gets
-    $1k added on each DCA day. This way each contribution grows from when
-    it was made, not from the start of the backtest.
+    Signal line is a running target that compounds at 9% per quarter daily
+    and gets $1k added on each DCA day. Cash earns the fed funds rate.
     """
     ftd = first_trading_days(df["date"])
     dates = df["date"]
     prices = df[lev3_col].values
+    cash_mult = build_daily_cash_rate(dates)
 
     portfolio_value = np.zeros(len(df))
     cash = 0.0
@@ -123,6 +158,10 @@ def ninesig_strategy(df, lev3_col):
         # Compound signal daily
         if started:
             signal *= daily_growth_factor
+
+        # Cash earns risk-free rate daily
+        if cash > 0:
+            cash *= cash_mult[i]
 
         # DCA into cash pool on first trading day of month
         if dca_idx < len(ftd) and i == ftd[dca_idx]:
@@ -160,10 +199,11 @@ def ninesig_strategy(df, lev3_col):
 
 
 def ma200_strategy(df, base_col, lev3_col):
-    """200-day MA: hold 3× ETF when base > 200-day SMA, else cash."""
+    """200-day MA: hold 3× ETF when base > 200-day SMA, else cash (earning fed funds rate)."""
     ftd = first_trading_days(df["date"])
     base_prices = df[base_col].values
     lev3_prices = df[lev3_col].values
+    cash_mult = build_daily_cash_rate(df["date"])
 
     base_sma200 = pd.Series(base_prices).rolling(200, min_periods=1).mean().values
 
@@ -187,6 +227,10 @@ def ma200_strategy(df, base_col, lev3_col):
                 cash += shares * lev3_prices[i]
                 shares = 0.0
             invested = False
+
+        # Cash earns risk-free rate daily
+        if cash > 0:
+            cash *= cash_mult[i]
 
         if dca_idx < len(ftd) and i == ftd[dca_idx]:
             total_invested += MONTHLY_DCA
@@ -280,11 +324,13 @@ def ma200_9sig_strategy(df, base_col, lev3_col):
     When base drops below 200MA: sell all ETF shares to cash, suspend rebalancing.
     DCA contributions still accumulate in cash. Signal line keeps compounding.
     When base crosses back above 200MA: resume 9sig with existing cash + signal.
+    Cash earns the fed funds rate.
     """
     ftd = first_trading_days(df["date"])
     dates = df["date"]
     base_prices = df[base_col].values
     prices = df[lev3_col].values
+    cash_mult = build_daily_cash_rate(dates)
     base_sma200 = pd.Series(base_prices).rolling(200, min_periods=1).mean().values
 
     portfolio_value = np.zeros(len(df))
@@ -306,6 +352,10 @@ def ma200_9sig_strategy(df, base_col, lev3_col):
         # Compound signal daily regardless of MA state
         if started:
             signal *= daily_growth_factor
+
+        # Cash earns risk-free rate daily
+        if cash > 0:
+            cash *= cash_mult[i]
 
         # Check MA crossover
         new_above = base_prices[i] > base_sma200[i]
