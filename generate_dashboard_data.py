@@ -13,8 +13,8 @@ from pathlib import Path
 
 from leveraged_etf_backtest import (
     load_index, simulate_prices, dca_strategy, ninesig_strategy,
-    ma200_strategy, _strategy_xirr, _max_drawdown_pct, first_trading_days,
-    SP500_ETFS, NASDAQ_ETFS, MONTHLY_DCA,
+    ma200_strategy, ma200_9sig_strategy, _strategy_xirr, _max_drawdown_pct,
+    first_trading_days, SP500_ETFS, NASDAQ_ETFS, MONTHLY_DCA,
 )
 
 BASE_DIR = Path(__file__).parent
@@ -29,12 +29,13 @@ SP_STRAT_DEFS = [
     ("200MA UPRO",     lambda df: ma200_strategy(df, "spy", "upro")),
 ]
 NDX_STRAT_DEFS = [
-    ("DCA QQQ",        lambda df: dca_strategy(df, "qqq")),
-    ("DCA QLD",        lambda df: dca_strategy(df, "qld")),
-    ("DCA TQQQ",       lambda df: dca_strategy(df, "tqqq")),
-    ("9sig TQQQ+cash", lambda df: ninesig_strategy(df, "tqqq")),
-    ("200MA QLD",      lambda df: ma200_strategy(df, "qqq", "qld")),
-    ("200MA TQQQ",     lambda df: ma200_strategy(df, "qqq", "tqqq")),
+    ("DCA QQQ",          lambda df: dca_strategy(df, "qqq")),
+    ("DCA QLD",          lambda df: dca_strategy(df, "qld")),
+    ("DCA TQQQ",         lambda df: dca_strategy(df, "tqqq")),
+    ("9sig TQQQ+cash",   lambda df: ninesig_strategy(df, "tqqq")),
+    ("200MA QLD",        lambda df: ma200_strategy(df, "qqq", "qld")),
+    ("200MA TQQQ",       lambda df: ma200_strategy(df, "qqq", "tqqq")),
+    ("200MA+9sig TQQQ",  lambda df: ma200_9sig_strategy(df, "qqq", "tqqq")),
 ]
 ALL_STRAT_NAMES = [n for n, _ in SP_STRAT_DEFS] + [n for n, _ in NDX_STRAT_DEFS]
 
@@ -51,7 +52,8 @@ STRATEGY_COLORS = {
     "DCA TQQQ":       "#EC4899",
     "9sig TQQQ+cash": "#84CC16",
     "200MA QLD":      "#0E7490",
-    "200MA TQQQ":     "#6366F1",
+    "200MA TQQQ":       "#6366F1",
+    "200MA+9sig TQQQ":  "#F43F5E",
 }
 
 PORTFOLIO_START_YEARS = [1986, 1990, 1995, 2000, 2005, 2010]

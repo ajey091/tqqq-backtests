@@ -14,13 +14,11 @@ import matplotlib.pyplot as plt
 from pathlib import Path
 
 BASE_DIR = Path(__file__).parent
-DATA_DIR = BASE_DIR / "data"
-PLOT_DIR = BASE_DIR / "plots"
 
 # ── Configuration ──────────────────────────────────────────────────────────
 MONTHLY_DCA = 1000.0
 BORROW_COST = 0.015   # 1.5% annual borrow cost on leveraged portion
-SIGNAL_GROWTH = 0.09  # 9% annual for 9sig strategy
+SIGNAL_GROWTH = 0.09  # 9% per quarter for 9sig strategy (per Jason Kelly's methodology)
 LINE_WIDTH = 2.0
 DPI = 300
 
@@ -39,7 +37,7 @@ NASDAQ_ETFS = [
 
 # ── Load index data ───────────────────────────────────────────────────────
 def load_index(filename, col_name):
-    df = pd.read_csv(DATA_DIR / filename, parse_dates=["Date"])
+    df = pd.read_csv(BASE_DIR / filename, parse_dates=["Date"])
     df = df[["Date", "Close"]].dropna().sort_values("Date").reset_index(drop=True)
     df.columns = ["date", col_name]
     return df
@@ -113,7 +111,7 @@ def ninesig_strategy(df, lev3_col):
     total_invested = 0.0
     signal = 0.0  # running signal line value
 
-    daily_growth_factor = (1 + SIGNAL_GROWTH) ** (1 / 252)
+    daily_growth_factor = (1 + SIGNAL_GROWTH) ** (1 / 63)  # ~63 trading days per quarter
     months = dates.dt.month.values
     years = dates.dt.year.values
 
@@ -204,6 +202,156 @@ def ma200_strategy(df, base_col, lev3_col):
     return portfolio_value, total_invested
 
 
+def ninesig_bond_strategy(df, lev3_col, bond_col):
+    """9-signal with bonds: same as ninesig_strategy but holds bonds instead of cash.
+
+    The 'cash' portion is invested in a bond fund (e.g. VBMFX/AGG).
+    Quarterly rebalancing sells/buys between the leveraged ETF and bond fund.
+    """
+    ftd = first_trading_days(df["date"])
+    dates = df["date"]
+    prices = df[lev3_col].values
+    bond_prices = df[bond_col].values
+
+    portfolio_value = np.zeros(len(df))
+    bond_shares = 0.0
+    etf_shares = 0.0
+    total_invested = 0.0
+    signal = 0.0
+
+    daily_growth_factor = (1 + SIGNAL_GROWTH) ** (1 / 63)  # ~63 trading days per quarter
+    months = dates.dt.month.values
+    years = dates.dt.year.values
+
+    dca_idx = 0
+    last_rebal_quarter = None
+    started = False
+
+    for i in range(len(df)):
+        if started:
+            signal *= daily_growth_factor
+
+        # DCA into bonds on first trading day of month
+        if dca_idx < len(ftd) and i == ftd[dca_idx]:
+            total_invested += MONTHLY_DCA
+            signal += MONTHLY_DCA
+            if bond_prices[i] > 0:
+                bond_shares += MONTHLY_DCA / bond_prices[i]
+            started = True
+            dca_idx += 1
+
+        # Quarterly rebalance
+        current_quarter = (years[i], (months[i] - 1) // 3)
+        if current_quarter != last_rebal_quarter and started:
+            last_rebal_quarter = current_quarter
+
+            etf_value = etf_shares * prices[i]
+            bond_value = bond_shares * bond_prices[i]
+
+            if etf_value < signal:
+                # Buy ETF with bond proceeds
+                deficit = signal - etf_value
+                buy_amount = min(deficit, bond_value)
+                if buy_amount > 0:
+                    if bond_prices[i] > 0:
+                        bond_shares -= buy_amount / bond_prices[i]
+                    if prices[i] > 0:
+                        etf_shares += buy_amount / prices[i]
+            elif etf_value > signal:
+                # Sell ETF surplus into bonds
+                surplus = etf_value - signal
+                if prices[i] > 0:
+                    sell_shares = min(surplus / prices[i], etf_shares)
+                    etf_shares -= sell_shares
+                    proceeds = sell_shares * prices[i]
+                    if bond_prices[i] > 0:
+                        bond_shares += proceeds / bond_prices[i]
+
+        portfolio_value[i] = etf_shares * prices[i] + bond_shares * bond_prices[i]
+
+    return portfolio_value, total_invested
+
+
+def ma200_9sig_strategy(df, base_col, lev3_col):
+    """200MA + 9sig hybrid: run 9sig rebalancing only when base > 200MA, else all cash.
+
+    When base index is above 200MA: DCA flows into the 9sig cash/ETF pool and
+    quarterly rebalancing occurs normally.
+    When base drops below 200MA: sell all ETF shares to cash, suspend rebalancing.
+    DCA contributions still accumulate in cash. Signal line keeps compounding.
+    When base crosses back above 200MA: resume 9sig with existing cash + signal.
+    """
+    ftd = first_trading_days(df["date"])
+    dates = df["date"]
+    base_prices = df[base_col].values
+    prices = df[lev3_col].values
+    base_sma200 = pd.Series(base_prices).rolling(200, min_periods=1).mean().values
+
+    portfolio_value = np.zeros(len(df))
+    cash = 0.0
+    shares = 0.0
+    total_invested = 0.0
+    signal = 0.0
+
+    daily_growth_factor = (1 + SIGNAL_GROWTH) ** (1 / 63)  # ~63 trading days per quarter
+    months = dates.dt.month.values
+    years = dates.dt.year.values
+
+    dca_idx = 0
+    last_rebal_quarter = None
+    started = False
+    above_ma = True  # start invested (like ma200_strategy)
+
+    for i in range(len(df)):
+        # Compound signal daily regardless of MA state
+        if started:
+            signal *= daily_growth_factor
+
+        # Check MA crossover
+        new_above = base_prices[i] > base_sma200[i]
+        if above_ma and not new_above:
+            # Crossed below — liquidate ETF to cash
+            if shares > 0:
+                cash += shares * prices[i]
+                shares = 0.0
+            above_ma = False
+        elif not above_ma and new_above:
+            above_ma = True
+            # Don't immediately buy — let next rebalance handle allocation
+
+        # DCA into cash pool on first trading day of month
+        if dca_idx < len(ftd) and i == ftd[dca_idx]:
+            cash += MONTHLY_DCA
+            total_invested += MONTHLY_DCA
+            signal += MONTHLY_DCA
+            started = True
+            dca_idx += 1
+
+        # Quarterly rebalance — only when above 200MA
+        if above_ma and started:
+            current_quarter = (years[i], (months[i] - 1) // 3)
+            if current_quarter != last_rebal_quarter:
+                last_rebal_quarter = current_quarter
+                etf_value = shares * prices[i]
+
+                if etf_value < signal:
+                    deficit = signal - etf_value
+                    buy_amount = min(deficit, cash)
+                    if buy_amount > 0 and prices[i] > 0:
+                        shares += buy_amount / prices[i]
+                        cash -= buy_amount
+                elif etf_value > signal:
+                    surplus = etf_value - signal
+                    if prices[i] > 0:
+                        sell_shares = min(surplus / prices[i], shares)
+                        shares -= sell_shares
+                        cash += sell_shares * prices[i]
+
+        portfolio_value[i] = shares * prices[i] + cash
+
+    return portfolio_value, total_invested
+
+
 # ── Summary stats ─────────────────────────────────────────────────────────
 def compute_stats(name, portfolio_values, total_invested, dates):
     final_val = portfolio_values[-1]
@@ -277,8 +425,7 @@ def run_backtest(df, label, etf_defs, base_col, lev2_col, lev3_col):
     ax1.grid(True, alpha=0.3)
     fig1.tight_layout()
     price_file = f"leveraged_etf_prices_{label}.png"
-    PLOT_DIR.mkdir(exist_ok=True)
-    fig1.savefig(PLOT_DIR / price_file, dpi=DPI)
+    fig1.savefig(BASE_DIR / price_file, dpi=DPI)
     plt.close(fig1)
     print(f"Saved: {price_file}")
 
@@ -331,7 +478,7 @@ def run_backtest(df, label, etf_defs, base_col, lev2_col, lev3_col):
     ax2.grid(True, alpha=0.3)
     fig2.tight_layout()
     strat_file = f"leveraged_etf_strategies_{label}.png"
-    fig2.savefig(PLOT_DIR / strat_file, dpi=DPI)
+    fig2.savefig(BASE_DIR / strat_file, dpi=DPI)
     plt.close(fig2)
     print(f"Saved: {strat_file}")
 
@@ -526,7 +673,7 @@ def _run_and_plot_combined(sp_df, ndx_df, start_year):
         fig.tight_layout()
         scale = "log" if log_scale else "linear"
         fname = f"leveraged_etf_combined_{tag}_{scale}.png"
-        fig.savefig(PLOT_DIR / fname, dpi=DPI)
+        fig.savefig(BASE_DIR / fname, dpi=DPI)
         plt.close(fig)
         print(f"Saved: {fname}")
 
@@ -682,7 +829,7 @@ def main():
     print("\n\n" + "=" * 60)
     print("NASDAQ-100 LEVERAGED ETF BACKTEST")
     print("=" * 60)
-    ndx_file = DATA_DIR / "NDX_daily.csv"
+    ndx_file = BASE_DIR / "NDX_daily.csv"
     if not ndx_file.exists():
         print("NDX_daily.csv not found — downloading from Yahoo Finance...")
         download_ndx()
@@ -728,7 +875,7 @@ def download_ndx():
             rows.append([dt, quotes["open"][i], quotes["high"][i],
                          quotes["low"][i], close, quotes["volume"][i], close])
 
-    with open(DATA_DIR / "NDX_daily.csv", "w", newline="") as f:
+    with open(BASE_DIR / "NDX_daily.csv", "w", newline="") as f:
         writer = csv.writer(f)
         writer.writerow(["Date", "Open", "High", "Low", "Close", "Volume", "Adj Close"])
         writer.writerows(rows)
